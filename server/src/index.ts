@@ -6,13 +6,10 @@ import specialityRouter from "./routes/speciality.routes";
 import appointmentRouter from "./routes/appointment.routes";
 import ratingRouter from "./routes/ratings.routes";
 
-import { PrismaClient } from "@prisma/client";
 import cors from "cors";
 import { CLIENT_URL } from "./utils/constants.utils";
 
 const app = express();
-
-const prisma = new PrismaClient();
 
 app.use(
     cors({
@@ -35,15 +32,6 @@ app.use("/api/contact", contactRouter);
 app.use("/api/speciality", specialityRouter);
 app.use('/api/appointments', appointmentRouter);
 app.use("/api/ratings", ratingRouter);
-
-app.get("/reset", async (req, res) => {
-    // Reset the database
-
-    await prisma.user.deleteMany({});
-    await prisma.hospital.deleteMany({});
-
-    res.status(200).send({ message: "Database reset" });
-});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

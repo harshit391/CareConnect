@@ -30,22 +30,25 @@ export const generateToken = async (payload: any) => {
     });
 };
 
-export const verifyToken = async (
+export const verifyToken = (
     req: Request,
     res: Response,
     next: NextFunction
-) => {
-    const authToken: string | null = req.headers["Authorization"] as
-        | string
-        | null;
+): void => {
+    const authHeader = req.headers["authorization"] as string | undefined;
 
-    if (!authToken) {
-        return res.status(401).send({ error: "Unauthorized" });
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        res.status(401).send({ error: "Unauthorized" });
+        return;
     }
 
+    const token = authHeader.split(" ")[1];
+
     try {
-        const decodedAuthToken = jwt.verify(authToken, JWT_SECRET as string);
-        req.idFromToken = (decodedAuthToken as jwt.JwtPayload).userId;
+        const decodedAuthToken = jwt.verify(token, JWT_SECRET as string);
+        req.idFromToken =
+            (decodedAuthToken as jwt.JwtPayload).userId ||
+            (decodedAuthToken as jwt.JwtPayload).id;
         next();
     } catch (error) {
         console.error("Error in verifying token: ", error);
