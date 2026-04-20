@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import crypto from "crypto";
 import prisma from "../prisma";
 import { sendError } from "../utils/error.util";
 import {
@@ -23,12 +24,6 @@ export const getAllHospitals = async (
         const { emergency, role, approved, longitude, latitude, search } =
             req.query;
 
-        console.log("Emergency:", emergency);
-        console.log("Role:", role);
-        console.log("Approved:", approved);
-        console.log("Longitude:", longitude);
-        console.log("Latitude:", latitude);
-        console.log("Search:", search);
 
         if (search !== undefined) {
             const hospitals = await prisma.hospital.findMany({
@@ -48,9 +43,12 @@ export const getAllHospitals = async (
 
         let hospitals = null;
 
+        const lng = parseFloat(longitude as string);
+        const lat = parseFloat(latitude as string);
+
         if (emergency)
-            hospitals = await prisma.$queryRawUnsafe(`
-                SELECT h.id, h.email, h.name, h.password, h."parentId",
+            hospitals = await prisma.$queryRaw`
+                SELECT h.id, h.email, h.name, h."parentId",
                 ST_AsText(h."location") AS location,
                 h."currLocation", h."createdAt", h."updatedAt", h."timings",
                 h."approved", h."freeSlotDate", h."maxAppointments", h."emergency",
@@ -59,7 +57,7 @@ export const getAllHospitals = async (
                 ST_DistanceSphere(
                     ST_MakePoint(CAST(h."currLocation"->>'longitude' AS DOUBLE PRECISION),
                                 CAST(h."currLocation"->>'latitude' AS DOUBLE PRECISION)),
-                    ST_MakePoint(${longitude}, ${latitude})
+                    ST_MakePoint(${lng}, ${lat})
                 ) AS distance,
 
                 (
@@ -85,62 +83,96 @@ export const getAllHospitals = async (
             WHERE h."parentId" IS NULL AND h."emergency" = true And h."approved" = true
 
             GROUP BY
-                h.id, h.email, h.name, h.password, h."parentId",
+                h.id, h.email, h.name, h."parentId",
                 h."location", h."currLocation", h."createdAt", h."updatedAt", h."timings",
                 h."approved", h."freeSlotDate", h."maxAppointments", h."emergency",
                 h."fees", h."phone"
 
             ORDER BY "doctorCount" DESC, distance;
-        `);
+        `;
         else if (role && approved) {
             console.log("Inside role and approved");
 
             console.log("Role:", role);
             console.log("Approved:", approved);
 
-            hospitals = await prisma.$queryRawUnsafe(`
-                SELECT h.id, h.email, h.name, h.password, h."parentId",
-                    ST_AsText(h."location") AS location,
-                    h."currLocation", h."createdAt", h."updatedAt", h."timings",
-                    h."approved", h."freeSlotDate", h."maxAppointments", h."emergency",
-                    h."fees", h."phone", h."count",
-                    ST_DistanceSphere(
-                        ST_MakePoint(CAST(h."currLocation"->>'longitude' AS DOUBLE PRECISION),
-                                    CAST(h."currLocation"->>'latitude' AS DOUBLE PRECISION)),
-                        ST_MakePoint(${longitude}, ${latitude})
-                    ) AS distance,
+            const isHospitalRole = role === "HOSPITAL";
+            const isApproved = approved === "true";
 
-                    (
-                        SELECT COUNT(*)::INT
-                        FROM "Hospital" AS child
-                        WHERE child."parentId" = h.id
-                    ) AS "doctorCount",
-
-                    COALESCE(
-                        json_agg(
-                            DISTINCT jsonb_build_object(
-                                'id', s.id,
-                                'name', s.name,
-                                'description', s.description
-                            )
-                        ) FILTER (WHERE s.id IS NOT NULL),
-                        '[]'
-                    ) AS specialities
-
-                FROM "Hospital" h
-                LEFT JOIN "HospitalSpeciality" hs ON hs."hospitalId" = h.id
-                LEFT JOIN "Speciality" s ON s.id = hs."specialityId"
-                WHERE h."parentId" IS ${
-                    role === "HOSPITAL" ? "null" : "not null"
-                } and h."approved" = ${approved}
-                GROUP BY h.id
-                ORDER BY h."count"->>'doctorCount' DESC,distance;
-        `);
+            if (isHospitalRole) {
+                hospitals = await prisma.$queryRaw`
+                    SELECT h.id, h.email, h.name, h."parentId",
+                        ST_AsText(h."location") AS location,
+                        h."currLocation", h."createdAt", h."updatedAt", h."timings",
+                        h."approved", h."freeSlotDate", h."maxAppointments", h."emergency",
+                        h."fees", h."phone", h."count",
+                        ST_DistanceSphere(
+                            ST_MakePoint(CAST(h."currLocation"->>'longitude' AS DOUBLE PRECISION),
+                                        CAST(h."currLocation"->>'latitude' AS DOUBLE PRECISION)),
+                            ST_MakePoint(${lng}, ${lat})
+                        ) AS distance,
+                        (
+                            SELECT COUNT(*)::INT
+                            FROM "Hospital" AS child
+                            WHERE child."parentId" = h.id
+                        ) AS "doctorCount",
+                        COALESCE(
+                            json_agg(
+                                DISTINCT jsonb_build_object(
+                                    'id', s.id,
+                                    'name', s.name,
+                                    'description', s.description
+                                )
+                            ) FILTER (WHERE s.id IS NOT NULL),
+                            '[]'
+                        ) AS specialities
+                    FROM "Hospital" h
+                    LEFT JOIN "HospitalSpeciality" hs ON hs."hospitalId" = h.id
+                    LEFT JOIN "Speciality" s ON s.id = hs."specialityId"
+                    WHERE h."parentId" IS null and h."approved" = ${isApproved}
+                    GROUP BY h.id
+                    ORDER BY h."count"->>'doctorCount' DESC, distance;
+                `;
+            } else {
+                hospitals = await prisma.$queryRaw`
+                    SELECT h.id, h.email, h.name, h."parentId",
+                        ST_AsText(h."location") AS location,
+                        h."currLocation", h."createdAt", h."updatedAt", h."timings",
+                        h."approved", h."freeSlotDate", h."maxAppointments", h."emergency",
+                        h."fees", h."phone", h."count",
+                        ST_DistanceSphere(
+                            ST_MakePoint(CAST(h."currLocation"->>'longitude' AS DOUBLE PRECISION),
+                                        CAST(h."currLocation"->>'latitude' AS DOUBLE PRECISION)),
+                            ST_MakePoint(${lng}, ${lat})
+                        ) AS distance,
+                        (
+                            SELECT COUNT(*)::INT
+                            FROM "Hospital" AS child
+                            WHERE child."parentId" = h.id
+                        ) AS "doctorCount",
+                        COALESCE(
+                            json_agg(
+                                DISTINCT jsonb_build_object(
+                                    'id', s.id,
+                                    'name', s.name,
+                                    'description', s.description
+                                )
+                            ) FILTER (WHERE s.id IS NOT NULL),
+                            '[]'
+                        ) AS specialities
+                    FROM "Hospital" h
+                    LEFT JOIN "HospitalSpeciality" hs ON hs."hospitalId" = h.id
+                    LEFT JOIN "Speciality" s ON s.id = hs."specialityId"
+                    WHERE h."parentId" IS not null and h."approved" = ${isApproved}
+                    GROUP BY h.id
+                    ORDER BY h."count"->>'doctorCount' DESC, distance;
+                `;
+            }
 
             console.log("Hospitals fetched:", hospitals.length);
         } else {
-            hospitals = await prisma.$queryRawUnsafe(`
-            SELECT h.id, h.email, h.name, h.password, h."parentId",
+            hospitals = await prisma.$queryRaw`
+            SELECT h.id, h.email, h.name, h."parentId",
                 ST_AsText(h."location") AS location,
                 h."currLocation", h."createdAt", h."updatedAt", h."timings",
                 h."approved", h."freeSlotDate", h."maxAppointments", h."emergency",
@@ -148,7 +180,7 @@ export const getAllHospitals = async (
                 ST_DistanceSphere(
                     ST_MakePoint(CAST(h."currLocation"->>'longitude' AS DOUBLE PRECISION),
                                 CAST(h."currLocation"->>'latitude' AS DOUBLE PRECISION)),
-                    ST_MakePoint(${longitude}, ${latitude})
+                    ST_MakePoint(${lng}, ${lat})
                 ) AS distance,
 
                 (
@@ -173,8 +205,8 @@ export const getAllHospitals = async (
             LEFT JOIN "Speciality" s ON s.id = hs."specialityId"
             WHERE h."parentId" IS NULL and h."approved" = true
             GROUP BY h.id
-            ORDER BY h."count"->>'doctorCount' DESC,distance;
-        `);
+            ORDER BY h."count"->>'doctorCount' DESC, distance;
+        `;
         }
 
         console.log("Hospitals fetched:", hospitals.length);
@@ -207,8 +239,11 @@ export const getTopHospitals = async (
             return;
         }
 
-        const hospitals = await prisma.$queryRawUnsafe(`
-            SELECT h.id, h.email, h.name, h.password, h."parentId",
+        const lng = parseFloat(longitude as string);
+        const lat = parseFloat(latitude as string);
+
+        const hospitals = await prisma.$queryRaw`
+            SELECT h.id, h.email, h.name, h."parentId",
                 ST_AsText(h."location") AS location,
                 h."currLocation", h."createdAt", h."updatedAt", h."timings",
                 h."approved", h."freeSlotDate", h."maxAppointments", h."emergency",
@@ -216,7 +251,7 @@ export const getTopHospitals = async (
                 ST_DistanceSphere(
                     ST_MakePoint(CAST(h."currLocation"->>'longitude' AS DOUBLE PRECISION),
                                 CAST(h."currLocation"->>'latitude' AS DOUBLE PRECISION)),
-                    ST_MakePoint(${longitude}, ${latitude})
+                    ST_MakePoint(${lng}, ${lat})
                 ) AS distance,
 
                 (
@@ -243,7 +278,7 @@ export const getTopHospitals = async (
             GROUP BY h.id
             ORDER BY h."count"->>'doctorCount' DESC, distance
             LIMIT 8;
-        `);
+        `;
 
         res.status(200).send(hospitals);
     } catch (error) {
@@ -504,15 +539,15 @@ export const register = async (
                 };
             }
 
-            await prisma.$executeRawUnsafe(`
+            await prisma.$executeRaw`
                 UPDATE "Hospital"
                 SET count = jsonb_set(
                     count,
                     '{doctorCount}',
                     ((count->>'doctorCount')::int + 1)::text::jsonb
                 )
-                WHERE id = '${associatedHospital.id}';
-            `);
+                WHERE id = ${associatedHospital.id};
+            `;
         }
 
         const longitude = new Decimal(hospitalData.longitude);
@@ -576,13 +611,14 @@ export const register = async (
 
         console.log("Created Hospital :=", hospital);
 
-        await prisma.$executeRawUnsafe(`
-            UPDATE "Hospital"
-            SET location = ST_SetSRID(ST_MakePoint(${latitude}, ${longitude}), 4326)
-            WHERE id = '${hospital.id}';
-        `);
+        const latNum = Number(latitude);
+        const lngNum = Number(longitude);
 
-        console.log("Updated Hospital Location :=", hospital);
+        await prisma.$executeRaw`
+            UPDATE "Hospital"
+            SET location = ST_SetSRID(ST_MakePoint(${latNum}, ${lngNum}), 4326)
+            WHERE id = ${hospital.id};
+        `;
 
         const token = await generateToken({ userId: hospital.id });
 
@@ -617,8 +653,7 @@ export const sendEmail = async (
             throw new Error("User not found");
         }
 
-        const verificationCode =
-            Math.floor(100000 + Math.random() * 900000) + "";
+        const verificationCode = crypto.randomInt(100000, 999999).toString();
 
         const updatedUser = await prisma.hospital.update({
             where: { id: id },
@@ -662,10 +697,6 @@ export const verifyEmail = async (
         }
 
         if (user.verificationCode !== code) {
-            await prisma.hospital.delete({
-                where: { id: id },
-            });
-
             throw new Error("Invalid Verification Code");
         }
 
@@ -710,8 +741,7 @@ export const forgotPassword = async (
             throw new Error("User not found");
         }
 
-        const verificationCode =
-            Math.floor(100000 + Math.random() * 900000) + "";
+        const verificationCode = crypto.randomInt(100000, 999999).toString();
 
         const updatedUser = await prisma.hospital.update({
             where: { id: user.id },
@@ -837,15 +867,15 @@ export const bulkRegister = async (
                         entry.latitude = currLoc.latitude;
                     }
 
-                    await prisma.$executeRawUnsafe(`
+                    await prisma.$executeRaw`
                         UPDATE "Hospital"
                         SET count = jsonb_set(
                             count,
                             '{doctorCount}',
                             ((count->>'doctorCount')::int + 1)::text::jsonb
                         )
-                        WHERE id = '${associatedHospital.id}';
-                    `);
+                        WHERE id = ${associatedHospital.id};
+                    `;
                 }
 
                 const longitude = new Decimal(entry.longitude);
@@ -896,11 +926,14 @@ export const bulkRegister = async (
                     include: { parent: true },
                 });
 
-                await prisma.$executeRawUnsafe(`
+                const bulkLatNum = Number(latitude);
+                const bulkLngNum = Number(longitude);
+
+                await prisma.$executeRaw`
                     UPDATE "Hospital"
-                    SET location = ST_SetSRID(ST_MakePoint(${latitude}, ${longitude}), 4326)
-                    WHERE id = '${hospital.id}';
-                `);
+                    SET location = ST_SetSRID(ST_MakePoint(${bulkLatNum}, ${bulkLngNum}), 4326)
+                    WHERE id = ${hospital.id};
+                `;
 
                 const token = await generateToken({ userId: hospital.id });
 
@@ -1032,11 +1065,14 @@ export const bulkRegisterAlt = async (
                 include: { parent: true },
             });
 
-            await prisma.$executeRawUnsafe(`
+            const altLatNum = Number(latitude);
+            const altLngNum = Number(longitude);
+
+            await prisma.$executeRaw`
                 UPDATE "Hospital"
-                SET location = ST_SetSRID(ST_MakePoint(${latitude}, ${longitude}), 4326)
-                WHERE id = '${hospital.id}';
-            `);
+                SET location = ST_SetSRID(ST_MakePoint(${altLatNum}, ${altLngNum}), 4326)
+                WHERE id = ${hospital.id};
+            `;
 
             const token = await generateToken({ userId: hospital.id });
 
@@ -1263,12 +1299,17 @@ export const updateHospital = async (
     }
 
     try {
+        let hashedPassword = undefined;
+        if (password) {
+            hashedPassword = await encryptPassword(password);
+        }
+
         const hospital = await prisma.hospital.update({
             where: { id },
             data: {
                 email,
                 name,
-                password,
+                password: hashedPassword,
                 parentId,
                 phone,
                 documents,
@@ -1297,7 +1338,13 @@ export const updateLocation = async (
     res: Response
 ): Promise<void> => {
     try {
-        const { id, longitude, latitude } = req.body;
+        const { longitude, latitude } = req.body;
+        const id = req.idFromToken;
+
+        if (!id) {
+            res.status(401).send({ error: "Unauthorized" });
+            return;
+        }
 
         if (!longitude || !latitude) {
             res.status(400).send({

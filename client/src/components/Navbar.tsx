@@ -11,7 +11,6 @@ const Navbar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  console.log("Location", location.pathname);
 
   const [coordinates, setCoordinates] = useState<{
     lat: number, lon: number
@@ -44,7 +43,6 @@ const Navbar = () => {
 
   const { user, setUser, loading, admin, setAdmin, severity, setSeverity } = auth;
 
-  console.log("User", user);
 
   const hanldeSeverityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedSeverity = e.target.value;
@@ -63,7 +61,7 @@ const Navbar = () => {
           </div>
           <div className="flex items-center gap-2">
             <FontAwesomeIcon className="bg-[#26B9C0] rounded-full p-2 hover:bg-white cursor-pointer hover:text-[#26B9C0]" icon={faEnvelope} />
-            <p className="text-sm md:text-base">careconnent@gmail.com</p>
+            <p className="text-sm md:text-base">careconnect@gmail.com</p>
           </div>
           {coordinates && <div className="text-white">
             {coordinates?.lat + " " + coordinates?.lon}

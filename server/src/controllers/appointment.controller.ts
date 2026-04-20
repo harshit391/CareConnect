@@ -30,69 +30,57 @@ export const createAppointment = async (
     try {
         reqS("CREATE APPOINTMENT");
 
-        const doctor = await prisma.hospital.findUnique({
-            where: { id: hospitalId },
-        });
-
-        const now = new Date();
-
-        console.log("Current date:", now);
-        console.log("Doctor free slot date:", doctor?.freeSlotDate);
-
-        const nextDate = new Date(now);
-        nextDate.setDate(now.getDate() + 1);
-
-        console.log("Next date:", nextDate);
-
-        let lastDate =
-            doctor?.freeSlotDate == null
-                ? nextDate
-                : new Date(doctor?.freeSlotDate);
-
-        console.log("Last date:", lastDate);
-
-        if (lastDate <= now) {
-            lastDate = nextDate;
-        }
-
-        const expirationDate = new Date(date);
-        expirationDate.setDate(expirationDate.getDate() + 1);
-
-        console.log("Adjusted last date:", lastDate);
-
-        const appointment = await prisma.appointment.create({
-            data: {
-                userId,
-                hospitalId,
-                date: lastDate,
-                paidPrice,
-            },
-        });
-
-        if (!appointment) {
-            res.status(500).send({ message: "Failed to create appointment" });
-            return;
-        }
-
-        const totalAppointments = await prisma.appointment.count({
-            where: { hospitalId, date: lastDate },
-        });
-
-        const newLastDate = new Date(lastDate);
-        newLastDate.setDate(lastDate.getDate() + 1);
-
-        if (totalAppointments >= (doctor?.maxAppointments || 20)) {
-            await prisma.hospital.update({
+        const result = await prisma.$transaction(async (tx: any) => {
+            const doctor = await tx.hospital.findUnique({
                 where: { id: hospitalId },
+            });
+
+            if (!doctor) {
+                throw new Error("Doctor not found");
+            }
+
+            const now = new Date();
+            const nextDate = new Date(now);
+            nextDate.setDate(now.getDate() + 1);
+
+            let lastDate =
+                doctor.freeSlotDate == null
+                    ? nextDate
+                    : new Date(doctor.freeSlotDate);
+
+            if (lastDate <= now) {
+                lastDate = nextDate;
+            }
+
+            const appointment = await tx.appointment.create({
                 data: {
-                    freeSlotDate: newLastDate,
+                    userId,
+                    hospitalId,
+                    date: lastDate,
+                    paidPrice,
                 },
             });
-        }
 
-        console.log(appointment);
+            const totalAppointments = await tx.appointment.count({
+                where: { hospitalId, date: lastDate },
+            });
 
-        res.status(201).send(appointment);
+            if (totalAppointments >= (doctor.maxAppointments || 20)) {
+                const newLastDate = new Date(lastDate);
+                newLastDate.setDate(lastDate.getDate() + 1);
+
+                await tx.hospital.update({
+                    where: { id: hospitalId },
+                    data: {
+                        freeSlotDate: newLastDate,
+                    },
+                });
+            }
+
+            return appointment;
+        });
+
+        res.status(201).send(result);
 
         reqE();
     } catch (error) {
@@ -260,9 +248,7 @@ export const requestRefund = async (
     try {
         const { id } = req.params;
         const { bankDetails } = req.body;
-
-        console.log("Updating appointment with ID:", id);
-        console.log("New bank details:", bankDetails);
+        const requesterId = req.idFromToken;
 
         if (!id) {
             res.status(400).send({ error: "Appointment ID is required" });
@@ -271,6 +257,12 @@ export const requestRefund = async (
 
         if (!bankDetails) {
             res.status(400).send({ error: "Bank details are required" });
+            return;
+        }
+
+        const existing = await prisma.appointment.findUnique({ where: { id } });
+        if (!existing || existing.userId !== requesterId) {
+            res.status(403).send({ error: "Not authorized to modify this appointment" });
             return;
         }
 
@@ -296,9 +288,7 @@ export const updateStatus = async (
     try {
         const { id } = req.params;
         const { status, doctorCharges } = req.body;
-
-        console.log("Updating appointment with ID:", id);
-        console.log("New status:", status);
+        const requesterId = req.idFromToken;
 
         if (!id) {
             res.status(400).send({ error: "Appointment ID is required" });
@@ -307,6 +297,12 @@ export const updateStatus = async (
 
         if (!status) {
             res.status(400).send({ error: "Status is required" });
+            return;
+        }
+
+        const existing = await prisma.appointment.findUnique({ where: { id } });
+        if (!existing || (existing.userId !== requesterId && existing.hospitalId !== requesterId)) {
+            res.status(403).send({ error: "Not authorized to modify this appointment" });
             return;
         }
 
@@ -382,11 +378,16 @@ export const cancelAppointment = async (
 ): Promise<void> => {
     try {
         const { id } = req.params;
-
-        console.log("Cancelling appointment with ID:", id);
+        const requesterId = req.idFromToken;
 
         if (!id) {
             res.status(400).send({ error: "Appointment ID is required" });
+            return;
+        }
+
+        const existing = await prisma.appointment.findUnique({ where: { id } });
+        if (!existing || (existing.userId !== requesterId && existing.hospitalId !== requesterId)) {
+            res.status(403).send({ error: "Not authorized to modify this appointment" });
             return;
         }
 

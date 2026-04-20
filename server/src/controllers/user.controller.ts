@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { Decimal } from "@prisma/client/runtime/library";
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import prisma from "../prisma";
 import {
@@ -179,7 +180,7 @@ export const login = async (
         const latDecimal = new Decimal(latitude);
 
         console.log("Email:", email);
-        console.log("Password:", password);
+        // Password intentionally not logged
         console.log("Latitude:", latDecimal);
         console.log("Longitude:", longDecimal);
 
@@ -251,8 +252,7 @@ export const sendEmail = async (
             throw new Error("User not found");
         }
 
-        const verificationCode =
-            Math.floor(100000 + Math.random() * 900000) + "";
+        const verificationCode = crypto.randomInt(100000, 999999).toString();
 
         const updatedUser = await prisma.user.update({
             where: { id: id },
@@ -296,10 +296,6 @@ export const verifyEmail = async (
         }
 
         if (user.verificationCode !== code) {
-            await prisma.user.delete({
-                where: { id: id },
-            });
-
             throw new Error("Invalid Verification Code");
         }
 
@@ -344,8 +340,7 @@ export const forgotPassword = async (
             throw new Error("User not found");
         }
 
-        const verificationCode =
-            Math.floor(100000 + Math.random() * 900000) + "";
+        const verificationCode = crypto.randomInt(100000, 999999).toString();
 
         const updatedUser = await prisma.user.update({
             where: { id: user.id },
@@ -470,17 +465,17 @@ export const updateLocation = async (
     res: Response
 ): Promise<void> => {
     try {
-        const { id, longitude, latitude } = req.body;
+        const id = req.idFromToken;
+        const { longitude, latitude } = req.body;
 
-        console.log("ID := ", id);
-        console.log("Longitude := ", longitude);
-        console.log("Latitude := ", latitude);
+        if (!id) {
+            res.status(401).send({ error: "Unauthorized" });
+            return;
+        }
 
         const user = await prisma.user.findUnique({
-            where: { id: id },
+            where: { id },
         });
-
-        console.log("User := ", user);
 
         if (!user) {
             throw new Error("User not found");
@@ -490,13 +485,11 @@ export const updateLocation = async (
         const latDecimal = new Decimal(latitude);
 
         await prisma.user.update({
-            where: { id: id },
+            where: { id },
             data: {
                 currLocation: { longitude: longDecimal, latitude: latDecimal },
             },
         });
-
-        console.log("User Location Updated :=", user.id);
 
         res.status(200).send({ message: "Location Updated" });
     } catch (error) {
@@ -526,7 +519,7 @@ export const resetPassword = async (
             throw new Error("User not found");
         }
 
-        console.log("Password := ", password);
+        // Password intentionally not logged
 
         const encPass = await encryptPassword(password);
         if (!encPass) {
@@ -556,29 +549,35 @@ export const updateUser = async (
     reqS("update user");
 
     try {
-        const { id } = req.params;
+        const id = req.idFromToken;
 
-        console.log("ID := ", id);
+        if (!id) {
+            res.status(401).send({ error: "Unauthorized" });
+            return;
+        }
 
         const user = await prisma.user.findFirst({
-            where: { id: id },
+            where: { id },
         });
-
-        console.log("User := ", user);
 
         if (!user) {
             throw new Error("User not found");
         }
 
-        const userData = { ...req.body };
+        const { name, email, phone } = req.body;
 
-        console.log("User Data := ", userData);
+        const updatedUser = await prisma.user.update({
+            where: { id },
+            data: {
+                ...(name && { name }),
+                ...(email && { email }),
+                ...(phone && { phone }),
+            },
+        });
 
-        const token = await generateToken({ userId: userData.id });
+        const token = await generateToken({ userId: updatedUser.id });
 
-        console.log("Generated Token :=", token);
-
-        res.status(201).send({ user, token });
+        res.status(200).send({ user: updatedUser, token });
     } catch (error) {
         reqER(error as Error);
         sendError(res, error as Error);

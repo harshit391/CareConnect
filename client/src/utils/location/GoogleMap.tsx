@@ -25,25 +25,16 @@ export const GoogleMap = ({ mapId, name, latitude, longitude }: {
 }) => {
 
     useEffect(() => {
-        console.log('GoogleMap component mounted');
-        console.log('Map ID:', mapId);
-        console.log('Latitude:', latitude);
-        console.log('Latitude:', typeof latitude);
-        console.log('Longitude:', longitude);
-        console.log('Longitude:', typeof longitude);
-        console.log('Name:', name);
-        console.log('Map ID:', mapId);
+        // Component mounted
     }, [])
 
-    return <APIProvider apiKey={'AIzaSyBt57R8L_7nNaskobeBU-rxDEYvGcwPquk'}
-        onLoad={() => console.log('Maps API has loaded.')}>
+    return <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''}
+        onLoad={() => {}}>
         <Map
             defaultZoom={13}
             defaultCenter={{ lat: Number(latitude), lng: Number(longitude) }}
             mapId={mapId}
-            onCameraChanged={(ev: MapCameraChangedEvent) =>
-                console.log('camera changed:', ev.detail.center, 'zoom:', ev.detail.zoom)
-            }>
+            onCameraChanged={(_ev: MapCameraChangedEvent) => {}}>
             <PoiMarkers pois={[
                 { key: name, location: { lat: Number(latitude), lng: Number(longitude) } },
             ]} />

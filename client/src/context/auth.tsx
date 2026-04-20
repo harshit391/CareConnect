@@ -53,7 +53,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             try {
                 const token = localStorage.getItem("eWauthToken");
 
-                console.log("Token At Verification", token);
 
                 if (!token) {
                     setUser(null);

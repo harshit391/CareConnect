@@ -100,7 +100,7 @@ export const getTopSpecialities = async (
             return;
         }
 
-        const allSpecialities: any[] = await prisma.$queryRawUnsafe(`
+        const allSpecialities: any[] = await prisma.$queryRaw`
                 SELECT
                 id,
                 name,
@@ -108,7 +108,7 @@ export const getTopSpecialities = async (
                 tags,
                 count
                 FROM "Speciality"
-            `);
+            `;
 
         const specialitiesWithMatchCount = allSpecialities.map((speciality: any) => {
             const matchingTagsCount = speciality.tags.filter((tag: any) => {
@@ -298,16 +298,14 @@ export const assignSpecialityToDoctor = async (
             }
         });
 
-        let increment = 1;
-
-        await prisma.$executeRawUnsafe(`
+        await prisma.$executeRaw`
             UPDATE "Speciality"
             SET count = jsonb_set(
                 count,
-                '{doctorCount}', ((count->>'doctorCount')::int + ${increment})::text::jsonb
+                '{doctorCount}', ((count->>'doctorCount')::int + 1)::text::jsonb
             )
-            WHERE id = '${speciality.id}';
-        `);
+            WHERE id = ${speciality.id};
+        `;
 
         const updatedDoctor = await prisma.hospital.update({
             where: { id: id },
@@ -321,7 +319,7 @@ export const assignSpecialityToDoctor = async (
             },
         });
 
-        await prisma.$executeRawUnsafe(`
+        await prisma.$executeRaw`
             UPDATE "Hospital"
             SET count = jsonb_set(
                 jsonb_set(
@@ -333,8 +331,8 @@ export const assignSpecialityToDoctor = async (
                 ),
                 '{highSeverity}', ((count->>'highSeverity')::int + ${high})::text::jsonb
             )
-            WHERE id = '${doctor.id}';
-        `);
+            WHERE id = ${doctor.id};
+        `;
 
         if (!updatedDoctor) {
             res.status(404).send({ message: "Doctor not found" });
@@ -357,14 +355,14 @@ export const assignSpecialityToDoctor = async (
                     },
                 });
 
-                await prisma.$executeRawUnsafe(`
+                await prisma.$executeRaw`
                     UPDATE "Speciality"
                     SET count = jsonb_set(
                         count,
-                        '{hospitalCount}', ((count->>'hospitalCount')::int + ${increment})::text::jsonb
+                        '{hospitalCount}', ((count->>'hospitalCount')::int + 1)::text::jsonb
                     )
-                    WHERE id = '${speciality.id}';
-                `);
+                    WHERE id = ${speciality.id};
+                `;
             }
 
             await prisma.hospital.update({
@@ -376,7 +374,7 @@ export const assignSpecialityToDoctor = async (
                 },
             });
 
-            await prisma.$executeRawUnsafe(`
+            await prisma.$executeRaw`
                 UPDATE "Hospital"
                 SET count = jsonb_set(
                     jsonb_set(
@@ -388,8 +386,8 @@ export const assignSpecialityToDoctor = async (
                     ),
                     '{highSeverity}', ((count->>'highSeverity')::int + ${high})::text::jsonb
                 )
-                WHERE id = '${doctor.parentId}';
-            `);
+                WHERE id = ${doctor.parentId};
+            `;
         } else {
             res.status(404).send({ message: "Parent not found" });
             return;
@@ -476,16 +474,14 @@ export const bulkAssignSpecialities = async (
                     }
                 });
 
-                const increment = 1;
-
-                await prisma.$executeRawUnsafe(`
+                await prisma.$executeRaw`
                     UPDATE "Speciality"
                     SET count = jsonb_set(
                         count,
-                        '{doctorCount}', ((count->>'doctorCount')::int + ${increment})::text::jsonb
+                        '{doctorCount}', ((count->>'doctorCount')::int + 1)::text::jsonb
                     )
-                    WHERE id = '${speciality.id}';
-                `);
+                    WHERE id = ${speciality.id};
+                `;
 
                 await prisma.hospital.update({
                     where: { id: doctorId },
@@ -496,7 +492,7 @@ export const bulkAssignSpecialities = async (
                     },
                 });
 
-                await prisma.$executeRawUnsafe(`
+                await prisma.$executeRaw`
                     UPDATE "Hospital"
                     SET count = jsonb_set(
                         jsonb_set(
@@ -508,8 +504,8 @@ export const bulkAssignSpecialities = async (
                         ),
                         '{highSeverity}', ((count->>'highSeverity')::int + ${high})::text::jsonb
                     )
-                    WHERE id = '${doctor.id}';
-                `);
+                    WHERE id = ${doctor.id};
+                `;
 
                 if (doctor.parentId) {
                     const alreadyConnected =
@@ -528,14 +524,14 @@ export const bulkAssignSpecialities = async (
                             },
                         });
 
-                        await prisma.$executeRawUnsafe(`
+                        await prisma.$executeRaw`
                             UPDATE "Speciality"
                             SET count = jsonb_set(
                                 count,
-                                '{hospitalCount}', ((count->>'hospitalCount')::int + ${increment})::text::jsonb
+                                '{hospitalCount}', ((count->>'hospitalCount')::int + 1)::text::jsonb
                             )
-                            WHERE id = '${speciality.id}';
-                        `);
+                            WHERE id = ${speciality.id};
+                        `;
                     }
 
                     await prisma.hospital.update({
@@ -547,7 +543,7 @@ export const bulkAssignSpecialities = async (
                         },
                     });
 
-                    await prisma.$executeRawUnsafe(`
+                    await prisma.$executeRaw`
                         UPDATE "Hospital"
                         SET count = jsonb_set(
                             jsonb_set(
@@ -559,8 +555,8 @@ export const bulkAssignSpecialities = async (
                             ),
                             '{highSeverity}', ((count->>'highSeverity')::int + ${high})::text::jsonb
                         )
-                        WHERE id = '${doctor.parentId}';
-                    `);
+                        WHERE id = ${doctor.parentId};
+                    `;
                 }
             }
         }
@@ -641,16 +637,14 @@ export const removeSpecialityFromDoctor = async (
             }
         });
 
-        let decrement = 1;
-
-        await prisma.$executeRawUnsafe(`
+        await prisma.$executeRaw`
             UPDATE "Speciality"
             SET count = jsonb_set(
                 count,
-                '{doctorCount}', ((count->>'doctorCount')::int - ${decrement})::text::jsonb
+                '{doctorCount}', ((count->>'doctorCount')::int - 1)::text::jsonb
             )
-            WHERE id = '${speciality.id}';
-        `);
+            WHERE id = ${speciality.id};
+        `;
 
         const updatedDoctor = await prisma.hospital.update({
             where: { id: id },
@@ -664,7 +658,7 @@ export const removeSpecialityFromDoctor = async (
             },
         });
 
-        await prisma.$executeRawUnsafe(`
+        await prisma.$executeRaw`
             UPDATE "Hospital"
             SET count = jsonb_set(
                 jsonb_set(
@@ -676,8 +670,8 @@ export const removeSpecialityFromDoctor = async (
                 ),
                 '{highSeverity}', ((count->>'highSeverity')::int - ${high})::text::jsonb
             )
-            WHERE id = '${doctor.id}';
-        `);
+            WHERE id = ${doctor.id};
+        `;
 
         if (doctor.parentId) {
             const otherDoctorsWithSpecialty = await prisma.hospital.count({
@@ -704,16 +698,16 @@ export const removeSpecialityFromDoctor = async (
                     },
                 });
 
-                await prisma.$executeRawUnsafe(`
+                await prisma.$executeRaw`
                     UPDATE "Speciality"
                     SET count = jsonb_set(
                         count,
-                        '{hospitalCount}', ((count->>'hospitalCount')::int - ${decrement})::text::jsonb
+                        '{hospitalCount}', ((count->>'hospitalCount')::int - 1)::text::jsonb
                     )
-                    WHERE id = '${speciality.id}';
-                `);
+                    WHERE id = ${speciality.id};
+                `;
 
-                await prisma.$executeRawUnsafe(`
+                await prisma.$executeRaw`
                     UPDATE "Hospital"
                     SET count = jsonb_set(
                         jsonb_set(
@@ -725,8 +719,8 @@ export const removeSpecialityFromDoctor = async (
                         ),
                         '{highSeverity}', ((count->>'highSeverity')::int - ${high})::text::jsonb
                     )
-                    WHERE id = '${doctor.parentId}';
-                `);
+                    WHERE id = ${doctor.parentId};
+                `;
             }
         }
 

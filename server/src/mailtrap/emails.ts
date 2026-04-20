@@ -36,13 +36,13 @@ export const sendWelcomeEmail = async (email: string, name: string) => {
             subject: "Logged in Success",
             html: WELCOME_EMAIL.replace("{company_info_name}", "Care Connect")
                 .replace("{name}", name)
-                .replace("{company_info_address}", "Test_Company_info_address")
-                .replace("{company_info_city}", "Test_Company_info_city")
+                .replace("{company_info_address}", process.env.COMPANY_ADDRESS || "CareConnect Healthcare")
+                .replace("{company_info_city}", process.env.COMPANY_CITY || "New Delhi")
                 .replace(
                     "{company_info_zip_code}",
-                    "Test_Company_info_zip_code"
+                    process.env.COMPANY_ZIP || "110001"
                 )
-                .replace("{company_info_country}", "India"),
+                .replace("{company_info_country}", process.env.COMPANY_COUNTRY || "India"),
         });
 
         console.log("Welcome Email Sent SuccessFully", response);

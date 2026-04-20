@@ -5,5 +5,11 @@ export const getRedirectPath = (
 ) => {
     const queryParams = new URLSearchParams(locationSearch);
     const redirect = queryParams.get("redirect");
-    return redirect || fallback;
+
+    // Prevent open redirect attacks — only allow relative paths
+    if (redirect && redirect.startsWith("/") && !redirect.startsWith("//")) {
+        return redirect;
+    }
+
+    return fallback;
 };

@@ -121,11 +121,12 @@ const PaymentProcessing: React.FC<PaymentProcessingProps> = ({
 
                     console.log('Appointment Data:', appointmentData);
 
-                    // Replace this URL with your actual API endpoint
+                    const token = localStorage.getItem('eWauthToken');
                     const response = await fetch(`${API_URL}/appointments`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
                         },
                         body: JSON.stringify(appointmentData),
                     });

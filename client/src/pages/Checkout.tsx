@@ -120,7 +120,7 @@ const CheckoutPage: React.FC = () => {
                 // Update order details after fetching data
                 setOrderDetails(calculateOrderDetails());
 
-                const alreadyBooked = hospital?.appointments.filter((appointment: Appointment) => appointment.userId = (auth.user.id));
+                const alreadyBooked = hospital?.appointments.filter((appointment: Appointment) => appointment.userId === auth.user._id);
 
                 if (alreadyBooked && alreadyBooked.length > 0) {
                     alert("You have already booked an appointment with this doctor.");
